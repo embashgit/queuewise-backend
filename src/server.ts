@@ -7,7 +7,7 @@ import { initializeModels } from './models';
 
 dotenv.config();
 
-const app: Express= express();
+const app: Express = express();
 
 // Middleware
 app.use(express.json());
