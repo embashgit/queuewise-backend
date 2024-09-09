@@ -18,7 +18,7 @@ router.delete('/queues/:queueId', authenticateJWT, isAdmin, deleteQueue);
 // Joining queue
 router.post('/queues/:queueId/join',authenticateJWT, joinQueue);
 
-router.delete('/queues/:queueId/call',authenticateJWT, callFirstPersonInQueue); //Only for admin
+router.delete('/queues/:queueId/call',authenticateJWT, isAdmin, callFirstPersonInQueue); //Only for admin
 
 
 // PUT /queues/:queueId - Update an existing queue (authentication required, admin optional)
