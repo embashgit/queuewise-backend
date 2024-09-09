@@ -21,7 +21,7 @@ const startServer = async () => {
   try {
     await initializeModels(); // Sync models before starting the server
     console.log('Database connected...');
-    await sequelize.sync();
+    await sequelize.sync({ alter: true });
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   } catch (error) {
