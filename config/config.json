@@ -1,0 +1,23 @@
+{
+  "development": {
+    "username": "postgres",
+    "password": "embash",
+    "database": "queue_db",
+    "host": "127.0.0.1",
+    "dialect": "postgres"
+  },
+  "test": {
+    "username": "postgres",
+    "password": "embash",
+    "database": "queue_db",
+    "host": "127.0.0.1",
+    "dialect": "postgres"
+  },
+  "production": {
+    "username": "postgres",
+    "password": "embash",
+    "database": "queue_db",
+    "host": "127.0.0.1",
+    "dialect": "postgres"
+  }
+}
