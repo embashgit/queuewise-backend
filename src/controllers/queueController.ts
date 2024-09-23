@@ -3,6 +3,7 @@ import Queue from '../models/Queue';
 import User from '../models/User';
 import sequelize from '../config/config';
 import { UserQueue } from '@src/models';
+import { logQueueEvent } from '@src/service/queueEventService';
 
 
 // Delete queue controller (admin only)
@@ -26,13 +27,99 @@ export const deleteQueue = async (req: Request, res: Response): Promise<void> =>
     res.status(500).json({ message: 'Error deleting queue', error });
   }
 };
+export const getJoinedQueues = async (req: Request, res: Response): Promise<void> => {
+  const userId = (req as any).user.id;  // Get the authenticated user ID from the JWT
+
+  try {
+    // Fetch all queues that the user has joined
+    const joinedQueues = await Queue.findAll({
+      include: [{
+        model: User,
+        where: { id: userId },
+        attributes: [],  // We don't need any specific user attributes, so we leave this empty
+        through: {
+          attributes: []  // Exclude the join table attributes, if not needed
+        }
+      }],
+      attributes: ['id', 'eventType','description', 'queueLength', 'estimatedWaitTime'],  // Fetch only necessary Queue fields
+    });
+
+    if (!joinedQueues || joinedQueues.length === 0) {
+      res.status(404).json({ message: 'No joined queues found' });
+      return;
+    }
+
+    const allJoinedQueue = await Promise.all(joinedQueues.map(async (queue) => {
+      // Count the number of users in the queue using UserQueue model
+      const userCount = await UserQueue.count({ where: { queueId: queue.id } });
+
+      return {
+        ...queue.get(), // Get the queue details
+        userCount,      // Add the count of users in the waiting list
+      };
+    }));
+
+    res.status(200).json({
+      userId,
+      allJoinedQueue
+    });
+    
+  } catch (error) {
+    console.error('Error fetching joined queues:', error);
+    res.status(500).json({ message: 'Error fetching joined queues', error });
+  }
+};
+
+export const leaveQueue = async (req: Request, res: Response): Promise<void> => {
+  const { queueId } = req.params;
+  const userId = (req as any).user.id;  // Get the authenticated user ID from the JWT
+
+  try {
+    // Find the queue to ensure it exists
+    const queue = await Queue.findByPk(queueId);
+    if (!queue) {
+      res.status(404).json({ message: 'Queue not found' });
+      return;
+    }
+
+    // Find the entry in the UserQueue table for this user and queue
+    const userQueueEntry = await UserQueue.findOne({
+      where: { userId, queueId }
+    });
+
+    if (!userQueueEntry) {
+      res.status(404).json({ message: 'You have not joined this queue' });
+      return;
+    }
+
+    // Delete the entry, effectively removing the user from the queue
+    await userQueueEntry.destroy();
+
+    res.status(200).json({ message: 'Successfully left the queue' });
+  } catch (error) {
+    console.error('Error leaving queue:', error);
+    res.status(500).json({ message: 'Error leaving queue', error });
+  }
+};
+
 
 // Get all queues
 export const getAllQueues = async (req: Request, res: Response): Promise<void> => {
   try {
     const queues = await Queue.findAll();
 
-     res.status(200).json(queues);
+    // Map through each queue to calculate the number of users waiting
+    const queuesWithUserCounts = await Promise.all(queues.map(async (queue) => {
+      // Count the number of users in the queue using UserQueue model
+      const userCount = await UserQueue.count({ where: { queueId: queue.id } });
+
+      return {
+        ...queue.get(), // Get the queue details
+        userCount,      // Add the count of users in the waiting list
+      };
+    }));
+
+    res.status(200).json(queuesWithUserCounts);
 return;
   } catch (error) {
     res.status(500).json({ message: 'Error fetching queues', error });
@@ -93,31 +180,7 @@ export const updateQueue = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-export const callFirstPersonInQueue = async (req: Request, res: Response): Promise<void> => {
-  const queueId = req.params.queueId;
 
-  try {
-    // Find the first person (the one with the earliest createdAt timestamp)
-    const firstPersonInQueue = await UserQueue.findOne({
-      where: { queueId },
-      order: [['createdAt', 'ASC']]  // Order by the earliest join time
-    });
-
-    if (!firstPersonInQueue) {
-      res.status(404).json({ message: 'No users in the queue' });
-      return;
-    }
-
-    // Remove the association from the UserQueue (removing this row essentially removes the user from the queue)
-    await firstPersonInQueue.destroy();
-
-    res.status(200).json({ message: 'First person removed from the queue' });
-
-  } catch (error) {
-    console.error('Error removing first person from the queue:', error);
-    res.status(500).json({ message: 'Error removing first person from the queue', error });
-  }
-};
 
 
 export const getQueueWithUserDetails = async (req: Request, res: Response): Promise<void> => {
@@ -158,6 +221,7 @@ export const getQueueWithUserDetails = async (req: Request, res: Response): Prom
 
     res.status(200).json({
       queueId: queue.id,
+      queueLength:queue.queueLength,
       eventType: queue.eventType,
       users: usersWithDetails,
     });
@@ -167,13 +231,6 @@ export const getQueueWithUserDetails = async (req: Request, res: Response): Prom
     res.status(500).json({ message: 'Error fetching queue details', error });
   }
 };
-
-
-
-
-
-
-
 
 // Join a queue
 export const joinQueue = async (req: Request, res: Response): Promise<void> => {
@@ -218,6 +275,37 @@ export const joinQueue = async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     res.status(500).json({ message: 'Error joining queue', error });
+  }
+};
+
+// Call the next person in the queue
+export const callNextUser = async (req: Request, res: Response): Promise<void> => {
+  const queueId = req.params.queueId;
+
+  try {
+    // Get the first person in the queue based on the createdAt timestamp
+    const firstPersonInQueue = await UserQueue.findOne({
+      where: { queueId },
+      order: [['createdAt', 'ASC']]  // Get the earliest joined user
+    });
+
+    if (!firstPersonInQueue) {
+      res.status(404).json({ message: 'No users in the queue' });
+      return;
+    }
+
+    // Log the event for when this user is called
+    await logQueueEvent(firstPersonInQueue.userId, queueId, 'called');
+    // Optionally, notify the user that it's their turn (if notifications are implemented)
+
+    // Remove the user from the queue after they are called
+    await firstPersonInQueue.destroy();
+
+    res.status(200).json({ message: 'Next user called and removed from the queue successfully' });
+
+  } catch (error) {
+    console.error('Error calling next user:', error);
+    res.status(500).json({ message: 'Error calling next user', error });
   }
 };
 
