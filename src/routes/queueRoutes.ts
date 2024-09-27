@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import { getAllQueues, createQueue,updateQueue,callNextUser, getQueueWithUserDetails,joinQueue, deleteQueue, getJoinedQueues, leaveQueue } from '../controllers/queueController';
+import { getAllQueues, createQueue,updateQueue,callNextUser, getQueueWithUserDetails,joinQueue, deleteQueue, getJoinedQueues, leaveQueue, removeFromAttendace, getQueueEvents } from '../controllers/queueController';
 import { authenticateJWT } from '@src/middleware/authMiddleware'; 
 import { isAdmin } from '@src/middleware/adminMiddleware';
 const router = Router();
@@ -16,13 +16,18 @@ router.get('/queues/joined',authenticateJWT, getJoinedQueues);
 // DELETE /queues/:queueId - Admins only
 router.delete('/queues/:queueId', authenticateJWT, isAdmin, deleteQueue);
 
+// DELETE /queues/:queueId - Admins only
+router.get('/queues/:queueId/events', authenticateJWT, isAdmin, getQueueEvents);
+
 //  Leave Queues/:queueId - Admins only
 router.delete('/queues/:queueId/leave', authenticateJWT, leaveQueue);
 
 // Joining queue
 router.post('/queues/:queueId/join',authenticateJWT, joinQueue);
 
-router.delete('/queues/:queueId/call-next',authenticateJWT, isAdmin, callNextUser); //Only for admin
+router.put('/queues/:queueId/call-next',authenticateJWT, isAdmin, callNextUser); //Only for admin
+
+router.delete('/queues/:queueId/complete',authenticateJWT, isAdmin, removeFromAttendace); //Only for admin
 
 
 // PUT /queues/:queueId - Update an existing queue (authentication required, admin optional)
