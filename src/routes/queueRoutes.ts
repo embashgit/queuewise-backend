@@ -25,7 +25,7 @@ router.delete('/queues/:queueId/leave', authenticateJWT, leaveQueue);
 // Joining queue
 router.post('/queues/:queueId/join',authenticateJWT, joinQueue);
 
-router.put('/queues/:queueId/call-next',authenticateJWT, isAdmin, callNextUser); //Only for admin
+router.put('/queues/:queueId/call',authenticateJWT, isAdmin, callNextUser); //Only for admin
 
 router.delete('/queues/:queueId/complete',authenticateJWT, isAdmin, removeFromAttendace); //Only for admin
 

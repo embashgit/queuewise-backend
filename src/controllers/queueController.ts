@@ -288,11 +288,12 @@ export const joinQueue = async (req: Request, res: Response): Promise<void> => {
 // Call the next person in the queue
 export const callNextUser = async (req: Request, res: Response): Promise<void> => {
   const queueId = req.params.queueId;
+  const userId = req.body.userId;
 
   try {
     // Fetch the user with the lowest position in the queue
     const nextUser = await UserQueue.findOne({
-      where: { queueId, isCurrent: false },  // Ensure we're only fetching a user who is not currently in attendance
+      where: { queueId, userId },  // Ensure we're only fetching a user who is not currently in attendance
       order: [['position', 'ASC']]  // Fetch the user with the lowest position value
     });
 
@@ -301,6 +302,7 @@ export const callNextUser = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
+   
     await logQueueEvent(nextUser.userId, queueId, 'Called');
 
     // Reset the `isCurrent` flag for any other user currently marked as `isCurrent`
